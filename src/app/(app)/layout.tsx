@@ -4,7 +4,6 @@ import "../globals.css";
 import Providers from "@/components/Providers";
 import NextTopLoader from "nextjs-toploader";
 import { Header } from "@/components/layout/Header";
-import { RouteGuard } from "@/components/wrappers/RouteGuard";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -121,11 +120,8 @@ export default async function RootLayout({
         />
 
         <Providers>
-          <RouteGuard>
-            <Header />
-
-            {children}
-          </RouteGuard>
+          <Header />
+          {children}
         </Providers>
       </body>
     </html>

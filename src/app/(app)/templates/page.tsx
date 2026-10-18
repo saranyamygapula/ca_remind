@@ -1,215 +1,74 @@
-"use client";
+import { serverApi, getServerWorkspace } from "@/lib/serverApi";
+import TemplatesPageClient from "@/components/templates/TemplatesPageClient";
+import { MessageTemplateListItem } from "@/types/messageTemplate.types";
+import { Organization } from "@/types/organizations";
+import { Business } from "@/types/business";
 
-import { useState, useMemo } from "react";
-import TemplatesTable from "@/components/templates/TemplatesTable";
-import TemplatesFilter from "@/components/templates/TemplatesFilter";
-import TemplateFormDrawer from "@/components/templates/TemplateFormDrawer";
-import TemplateDetailsDrawer from "@/components/templates/TemplateDetailsDrawer";
-import ConfirmDialog from "@/components/tasks/ConfirmDialog";
-import ResourcePageLayout from "@/components/common/ResourcePageLayout";
-import { useWorkspace } from "@/context/WorkspaceContext";
-import { useResourcePageState } from "@/hooks/useResourcePageState";
-import StatCard from "@/components/task-definitions/StatCard";
-import PageSkeleton from "@/components/common/PageSkeleton";
-import {
-  StatusFilter,
-  ChannelFilter,
-  ReminderTypeFilter,
-} from "@/constants/messageTemplateConstants";
-import { useTemplates } from "@/hooks/templates/useTemplate";
+export const dynamic = "force-dynamic";
 
-export default function TemplatesPage() {
-  const { businessId } = useWorkspace();
-  const page = useResourcePageState();
+export default async function TemplatesPage() {
+  let businessId = "";
+  let initialTemplates: MessageTemplateListItem[] = [];
 
-  const {
-    templates,
-    loading,
-    error,
-    clearError,
-    refetch,
-    removeTemplate,
-    deleteLoading,
-  } = useTemplates(businessId);
+  try {
+    const workspace = await getServerWorkspace();
+    businessId = workspace.businessId || "";
 
-  // Filter state
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("ALL");
-  const [reminderTypeFilter, setReminderTypeFilter] =
-    useState<ReminderTypeFilter>("ALL");
+    if (!businessId) {
+      let orgId = workspace.orgId;
+      if (!orgId) {
+        const orgs = await serverApi.get<Organization[]>("/private/organizations");
+        if (orgs?.length > 0) orgId = orgs[0].id;
+      }
+      if (orgId) {
+        const businesses = await serverApi.get<Business[]>(
+          `/private/organizations/${orgId}/businesses`
+        );
+        if (businesses?.length > 0) businessId = businesses[0].id;
+      }
+    }
 
-  const handleDeleteConfirm = async () => {
-    const target = page.deleteTarget;
-    if (!target) return;
-    const ok = await removeTemplate(target.id, target.label);
-    if (ok) page.cancelDelete();
-  };
-
-  // Filter templates
-  const filteredTemplates = useMemo(() => {
-    let result = [...templates];
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (t) =>
-          t.name.toLowerCase().includes(query) ||
-          t.key?.toLowerCase().includes(query) ||
-          t.reminder_type?.toLowerCase().includes(query),
+    if (businessId) {
+      const data = await serverApi.get<unknown[]>(
+        `/private/business/${businessId}/v2messagetemplates`
       );
+      initialTemplates = (data ?? []).map((item: any): MessageTemplateListItem => ({
+        id: item.id ?? item.key,
+        key: item.key ?? "",
+        name: item.name ?? "",
+        channels: item.channels ?? [],
+        reminder_type: item.reminder_type,
+        serviceType: item.serviceType ?? item.reminder_type,
+        businessCategory: item.businessCategory ?? item.business_category ?? "",
+        placeholders: item.placeholders ?? [],
+        isActive: item.isActive ?? item.is_active ?? true,
+        templates: {
+          email: item.templates?.email
+            ? {
+                subject: item.templates.email.subject ?? "",
+                body: item.templates.email.body ?? "",
+              }
+            : undefined,
+          whatsapp: item.templates?.whatsapp
+            ? { body: item.templates.whatsapp.body ?? "" }
+            : undefined,
+        },
+      }));
     }
 
-    if (statusFilter === "ACTIVE") {
-      result = result.filter((t) => t.isActive === true);
-    } else if (statusFilter === "INACTIVE") {
-      result = result.filter((t) => t.isActive === false);
-    }
-
-    if (channelFilter !== "ALL") {
-      result = result.filter((t) => t.channels?.includes(channelFilter));
-    }
-
-    if (reminderTypeFilter !== "ALL") {
-      result = result.filter((t) => t.reminder_type === reminderTypeFilter);
-    }
-
-    return result;
-  }, [templates, searchQuery, statusFilter, channelFilter, reminderTypeFilter]);
-
-  // Derived stats
-  const stats = useMemo(() => {
-    const activeCount = templates.filter((t) => t.isActive).length;
-    const whatsappCount = templates.filter((t) =>
-      t.channels?.includes("whatsapp"),
-    ).length;
-    const emailCount = templates.filter((t) =>
-      t.channels?.includes("email"),
-    ).length;
-    return {
-      total: templates.length,
-      activeCount,
-      whatsappCount,
-      emailCount,
-    };
-  }, [templates]);
-
-  if (!businessId || (loading && templates.length === 0)) {
-    return <PageSkeleton hasStats={true} />;
-  }
-
-  return (
-    <ResourcePageLayout
-      title="Message templates"
-      description="Create and manage notification templates for compliance reminders."
-      actionLabel="New template"
-      actionVariant="amber"
-      onAction={page.openCreate}
-      error={error}
-      onDismissError={clearError}
-      stats={
-        <>
-          <StatCard
-            label="Total templates"
-            value={stats.total}
-            hint={
-              stats.total > 0 && stats.activeCount === stats.total
-                ? "All active"
-                : `${stats.activeCount} active`
-            }
-          />
-          <StatCard
-            label="WhatsApp enabled"
-            value={stats.whatsappCount}
-            hint="Instant messaging ready"
-            valueClassName="text-[#15803d] dark:text-emerald-400"
-          />
-          <StatCard
-            label="Email enabled"
-            value={stats.emailCount}
-            hint="Email delivery ready"
-            valueClassName="text-blue-600 dark:text-blue-400"
-          />
-          <StatCard
-            label="Active templates"
-            value={`${stats.activeCount} of ${stats.total}`}
-            hint="Ready for automated alerts"
-            valueClassName="text-[#059669] dark:text-emerald-400"
-          />
-        </>
-      }
-      filters={
-        <TemplatesFilter
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          statusFilter={statusFilter}
-          onStatusChange={setStatusFilter}
-          channelFilter={channelFilter}
-          onChannelChange={setChannelFilter}
-          reminderTypeFilter={reminderTypeFilter}
-          onReminderTypeChange={setReminderTypeFilter}
-          onReset={() => {
-            setSearchQuery("");
-            setStatusFilter("ALL");
-            setChannelFilter("ALL");
-            setReminderTypeFilter("ALL");
-          }}
-        />
-      }
-      summary={
-        !loading && (
-          <p className="text-sm text-txt-sub">
-            Showing {filteredTemplates.length} of {templates.length} templates
-          </p>
-        )
-      }
-      overlays={
-        <>
-          <TemplateDetailsDrawer
-            open={page.viewOpen}
-            onClose={page.close}
-            templateId={page.viewId}
-            businessId={businessId}
-            onEdit={page.openEdit}
-          />
-          <TemplateFormDrawer
-            open={page.formOpen}
-            onClose={page.close}
-            templateId={page.formId}
-            businessId={businessId}
-            onSuccess={() => {
-              refetch();
-              page.close();
-            }}
-          />
-          <ConfirmDialog
-            open={!!page.deleteTarget}
-            title="Delete Template"
-            description={
-              <>
-                Are you sure you want to delete{" "}
-                <strong>{page.deleteTarget?.label}</strong>? This action cannot
-                be undone.
-              </>
-            }
-            confirmLabel="Delete"
-            variant="danger"
-            loading={deleteLoading}
-            onConfirm={handleDeleteConfirm}
-            onCancel={page.cancelDelete}
-          />
-        </>
-      }
-    >
-      <TemplatesTable
-        templates={filteredTemplates}
-        loading={loading}
+    return (
+      <TemplatesPageClient
+        initialTemplates={initialTemplates}
         businessId={businessId}
-        onView={page.openView}
-        onEdit={page.openEdit}
-        onDelete={(id, name) => page.requestDelete(id, name)}
-        onRefresh={refetch}
       />
-    </ResourcePageLayout>
-  );
+    );
+  } catch (err: unknown) {
+    if ((err as { digest?: string })?.digest === "DYNAMIC_SERVER_USAGE") {
+      throw err;
+    }
+    console.error("Failed to load templates on server:", err);
+    return (
+      <TemplatesPageClient initialTemplates={[]} businessId={businessId} />
+    );
+  }
 }

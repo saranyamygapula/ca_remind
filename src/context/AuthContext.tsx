@@ -8,7 +8,7 @@ import {
 } from "react";
 import { onIdTokenChanged, User } from "firebase/auth";
 import { auth } from "@/config/firebase";
-import { setSessionCookie, clearSessionCookie } from "@/lib/session";
+import { setSessionCookie, clearSessionCookie } from "@/actions/auth";
 
 const AuthContext = createContext<{
   user: User | null;
@@ -27,18 +27,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      *  - sign-out
      *  - automatic Firebase token refresh (every ~1 hour)
      *
-     * This keeps the __session cookie perfectly in sync so the edge
-     * middleware always has a fresh token to read.
+     * This calls the server action to keep the HttpOnly __session cookie
+     * perfectly in sync on the server.
      */
     const unsubscribe = onIdTokenChanged(auth, async (u) => {
-      if (u) {
-        const token = await u.getIdToken();
-        setSessionCookie(token);
-      } else {
-        clearSessionCookie();
+      try {
+        if (u) {
+          const token = await u.getIdToken();
+          await setSessionCookie(token);
+        } else {
+          await clearSessionCookie();
+        }
+      } catch (err) {
+        console.error("Failed to update server session cookie:", err);
+      } finally {
+        setUser(u);
+        setLoading(false);
       }
-      setUser(u);
-      setLoading(false);
     });
 
     return unsubscribe;

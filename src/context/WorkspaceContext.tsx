@@ -27,6 +27,51 @@ interface WorkspaceContextType {
   refresh: () => Promise<{ orgId: string | null; businessId: string | null }>;
 }
 
+const WORKSPACE_COOKIE = "__workspace";
+
+function getInitialWorkspace(): {
+  orgId: string | null;
+  businessId: string | null;
+} {
+  if (typeof document === "undefined") {
+    return { orgId: null, businessId: null };
+  }
+  try {
+    const match = document.cookie.match(
+      new RegExp(`(?:^|;\\s*)${WORKSPACE_COOKIE}=([^;]*)`)
+    );
+    if (match?.[1]) {
+      const decoded = decodeURIComponent(match[1]);
+      const data = JSON.parse(decoded);
+      if (data?.orgId) {
+        return {
+          orgId: data.orgId,
+          businessId: data.businessId ?? null,
+        };
+      }
+    }
+  } catch {
+    // Ignore JSON parse errors and fallback to null
+  }
+  return { orgId: null, businessId: null };
+}
+
+function saveWorkspaceCookie(data: {
+  orgId: string | null;
+  businessId: string | null;
+}) {
+  if (typeof document === "undefined") return;
+  if (!data.orgId) {
+    document.cookie = `${WORKSPACE_COOKIE}=; Max-Age=0; Path=/; SameSite=Strict`;
+    return;
+  }
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  const maxAge = 60 * 60 * 24 * 30; // 30 days
+  document.cookie = `${WORKSPACE_COOKIE}=${encodeURIComponent(
+    JSON.stringify(data)
+  )}; Max-Age=${maxAge}; Path=/; SameSite=Strict${secure}`;
+}
+
 const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
@@ -34,10 +79,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [ids, setIds] = useState<{
     orgId: string | null;
     businessId: string | null;
-  }>({
-    orgId: null,
-    businessId: null,
-  });
+  }>(getInitialWorkspace);
   const [fetching, setFetching] = useState(false);
   const [fetchedUid, setFetchedUid] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -48,6 +90,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setFetchedUid(null);
       setError(null);
       setFetching(false);
+      saveWorkspaceCookie({ orgId: null, businessId: null });
       return { orgId: null, businessId: null };
     }
 
@@ -68,6 +111,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const newIds = { orgId: org?.id ?? null, businessId: biz?.id ?? null };
       setIds(newIds);
       setFetchedUid(user.uid);
+      saveWorkspaceCookie(newIds);
       return newIds;
     } catch (e) {
       setError(e as Error);
@@ -82,24 +126,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setIds({ orgId: null, businessId: null });
       setFetchedUid(null);
+      saveWorkspaceCookie({ orgId: null, businessId: null });
       return;
     }
     fetchWorkspace();
-  }, [authLoading, user]);
+  }, [authLoading, user, fetchWorkspace]);
 
   const refresh = useCallback(async () => {
     return await fetchWorkspace();
   }, [fetchWorkspace]);
 
-  // Keep state in "loading" while auth is resolving OR until we have finished fetching workspace for current user
+  // If we already have a cached workspace with orgId and businessId, DO NOT block on "loading"
+  const hasCached = !!ids.orgId && !!ids.businessId;
   const isResolving =
-    authLoading || (!!user && (fetching || fetchedUid !== user.uid));
+    !hasCached &&
+    (authLoading || (!!user && (fetching || fetchedUid !== user.uid)));
 
   const status: Status = isResolving
     ? "loading"
     : !user
       ? "unauthenticated"
-      : error
+      : error && !hasCached
         ? "error"
         : !ids.orgId
           ? "no_org"
