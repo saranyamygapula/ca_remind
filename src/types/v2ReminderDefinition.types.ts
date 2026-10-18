@@ -1,6 +1,6 @@
 // ─── Enums / Constants ───────────────────────────────────────────────────────
 
-export type ReminderChannel = 'WHATSAPP' | 'EMAIL' | 'SMS';
+export type ReminderChannel = 'WHATSAPP' | 'EMAIL' | 'SMS' | 'IN_APP' | string;
 
 // ─── Base / Shared ────────────────────────────────────────────────────────────
 

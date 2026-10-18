@@ -6,16 +6,16 @@ import {
   UpdateV2ReminderDefinitionPayload,
   ListV2ReminderDefinitionsResponse,
 } from '@/types/v2ReminderDefinition.types';
-import { REMINDERS_PATH } from '../constants/reminderConstants';
 
 const bizPath = (businessId: string) => `/private/business/${businessId}`;
+const V2_REMINDER_DEFS_PATH = 'v2reminderdefinitions';
 
-// GET /private/business/{businessId}/reminders
+// GET /private/business/{businessId}/v2reminderdefinitions
 // Handles both { items: [...] } and raw array responses.
 export const getV2ReminderDefinitions = (businessId: string): Promise<V2ReminderDefinition[]> =>
   api
     .get<ListV2ReminderDefinitionsResponse | V2ReminderDefinition[]>(
-      `${bizPath(businessId)}/${REMINDERS_PATH}`
+      `${bizPath(businessId)}/${V2_REMINDER_DEFS_PATH}`
     )
     .then((r) => {
       const data = r.data;
@@ -26,25 +26,25 @@ export const getV2ReminderDefinitions = (businessId: string): Promise<V2Reminder
       return [];
     });
 
-// GET /private/business/{businessId}/reminders/{definitionId}
+// GET /private/business/{businessId}/v2reminderdefinitions/{definitionId}
 export const getV2ReminderDefinitionById = (
   businessId: string,
   definitionId: string
 ): Promise<V2ReminderDefinition> =>
   api
-    .get<V2ReminderDefinition>(`${bizPath(businessId)}/${REMINDERS_PATH}/${definitionId}`)
+    .get<V2ReminderDefinition>(`${bizPath(businessId)}/${V2_REMINDER_DEFS_PATH}/${definitionId}`)
     .then((r) => r.data);
 
-// POST /private/business/{businessId}/reminders
+// POST /private/business/{businessId}/v2reminderdefinitions
 export const createV2ReminderDefinition = (
   businessId: string,
   payload: CreateV2ReminderDefinitionPayload
 ): Promise<V2ReminderDefinition> =>
   api
-    .post<V2ReminderDefinition>(`${bizPath(businessId)}/${REMINDERS_PATH}`, payload)
+    .post<V2ReminderDefinition>(`${bizPath(businessId)}/${V2_REMINDER_DEFS_PATH}`, payload)
     .then((r) => r.data);
 
-// PATCH /private/business/{businessId}/reminders/{definitionId}
+// PATCH /private/business/{businessId}/v2reminderdefinitions/{definitionId}
 export const updateV2ReminderDefinition = (
   businessId: string,
   definitionId: string,
@@ -52,16 +52,16 @@ export const updateV2ReminderDefinition = (
 ): Promise<V2ReminderDefinition> =>
   api
     .patch<V2ReminderDefinition>(
-      `${bizPath(businessId)}/${REMINDERS_PATH}/${definitionId}`,
+      `${bizPath(businessId)}/${V2_REMINDER_DEFS_PATH}/${definitionId}`,
       payload
     )
     .then((r) => r.data);
 
-// DELETE /private/business/{businessId}/reminders/{definitionId}
+// DELETE /private/business/{businessId}/v2reminderdefinitions/{definitionId}
 export const deleteV2ReminderDefinition = (
   businessId: string,
   definitionId: string
 ): Promise<void> =>
   api
-    .delete(`${bizPath(businessId)}/${REMINDERS_PATH}/${definitionId}`)
+    .delete(`${bizPath(businessId)}/${V2_REMINDER_DEFS_PATH}/${definitionId}`)
     .then(() => undefined);

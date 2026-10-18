@@ -254,6 +254,94 @@ export default function ReminderFormDrawer({
     [taskDefinitions, form.selectedTaskDefinitionId],
   );
 
+  // ── Reminder Definition Selection & Helpers ───────────────────────────────
+  const { matchingDefs, otherDefs } = useMemo(() => {
+    if (!form.selectedTaskDefinitionId) {
+      return { matchingDefs: [], otherDefs: reminderDefinitions };
+    }
+    const matching = reminderDefinitions.filter(
+      (rd) => rd.taskDefinitionId === form.selectedTaskDefinitionId,
+    );
+    const others = reminderDefinitions.filter(
+      (rd) => rd.taskDefinitionId !== form.selectedTaskDefinitionId,
+    );
+    return { matchingDefs: matching, otherDefs: others };
+  }, [reminderDefinitions, form.selectedTaskDefinitionId]);
+
+  const selectedReminderDef = useMemo(
+    () =>
+      reminderDefinitions.find((rd) => rd.id === form.reminderDefinitionId) ||
+      null,
+    [reminderDefinitions, form.reminderDefinitionId],
+  );
+
+  const formatOffsetLabel = (offsetDays: number) => {
+    if (offsetDays === 0) return "On due date";
+    if (offsetDays < 0) return `${Math.abs(offsetDays)}d before`;
+    return `${offsetDays}d after`;
+  };
+
+  const handleReminderDefChange = (reminderDefId: string) => {
+    const chosenDef = reminderDefinitions.find((rd) => rd.id === reminderDefId);
+    if (!chosenDef) {
+      setForm((prev) => ({ ...prev, reminderDefinitionId: "" }));
+      return;
+    }
+
+    const defChannel =
+      (chosenDef.channel as ReminderChannel) || form.channel || "WHATSAPP";
+
+    let templateId = chosenDef.messageTemplateId || form.messageTemplateId;
+    if (chosenDef.messageTemplateId) {
+      const matched = messageTemplates.find(
+        (t) => t.id === chosenDef.messageTemplateId,
+      );
+      if (matched) templateId = matched.id;
+    }
+
+    let updatedTaskDefId = form.selectedTaskDefinitionId;
+    let updatedTaskName = form.taskName;
+    let updatedDueDate = form.dueDate;
+
+    if (chosenDef.taskDefinitionId && !form.selectedTaskDefinitionId) {
+      const matchedTaskDef = taskDefinitions.find(
+        (td) => td.id === chosenDef.taskDefinitionId,
+      );
+      if (matchedTaskDef) {
+        updatedTaskDefId = matchedTaskDef.id;
+        if (!updatedTaskName) {
+          updatedTaskName = selectedClient
+            ? `${selectedClient.displayName || selectedClient.businessName} - ${matchedTaskDef.name}`
+            : matchedTaskDef.name;
+        }
+        if (matchedTaskDef.dueDate) {
+          updatedDueDate = matchedTaskDef.dueDate.slice(0, 10);
+        }
+      }
+    }
+
+    let proposedScheduledAt = form.scheduledAt;
+    if (updatedDueDate && typeof chosenDef.offsetDays === "number") {
+      const due = new Date(updatedDueDate);
+      if (!isNaN(due.getTime())) {
+        due.setDate(due.getDate() + chosenDef.offsetDays);
+        due.setHours(9, 0, 0, 0);
+        proposedScheduledAt = due.toISOString().slice(0, 16);
+      }
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      reminderDefinitionId: reminderDefId,
+      selectedTaskDefinitionId: updatedTaskDefId || prev.selectedTaskDefinitionId,
+      taskName: updatedTaskName || prev.taskName,
+      dueDate: updatedDueDate || prev.dueDate,
+      channel: defChannel,
+      messageTemplateId: templateId || prev.messageTemplateId,
+      scheduledAt: proposedScheduledAt || prev.scheduledAt,
+    }));
+  };
+
   const handleTaskTypeChange = (taskDefinitionId: string) => {
     const matchedDef = taskDefinitions.find((td) => td.id === taskDefinitionId);
     if (!matchedDef) return;
@@ -272,19 +360,37 @@ export default function ReminderFormDrawer({
       nextDueDate = today.toISOString().slice(0, 10);
     }
 
-    // Match reminder definition if available
-    const matchedReminderDef = reminderDefinitions.find(
+    // Match reminder definitions for this task definition
+    const matchedDefs = reminderDefinitions.filter(
       (rd) => rd.taskDefinitionId === taskDefinitionId,
     );
+    const matchedReminderDef =
+      matchedDefs.find((rd) => rd.isActive) || matchedDefs[0];
 
     // Auto-match message template synchronously
     const matchedTemplate = messageTemplates.find(
       (t) =>
+        (matchedReminderDef?.messageTemplateId &&
+          t.id === matchedReminderDef.messageTemplateId) ||
         t.name
           ?.toLowerCase()
           .includes(matchedDef.taskType?.toLowerCase() || "") ||
         t.name?.toLowerCase().includes(matchedDef.name?.toLowerCase() || ""),
     );
+
+    let proposedScheduledAt = form.scheduledAt;
+    if (
+      matchedReminderDef &&
+      nextDueDate &&
+      typeof matchedReminderDef.offsetDays === "number"
+    ) {
+      const due = new Date(nextDueDate);
+      if (!isNaN(due.getTime())) {
+        due.setDate(due.getDate() + matchedReminderDef.offsetDays);
+        due.setHours(9, 0, 0, 0);
+        proposedScheduledAt = due.toISOString().slice(0, 16);
+      }
+    }
 
     setForm((prev) => ({
       ...prev,
@@ -297,6 +403,7 @@ export default function ReminderFormDrawer({
         "WHATSAPP",
       reminderDefinitionId: matchedReminderDef?.id || prev.reminderDefinitionId,
       messageTemplateId: matchedTemplate?.id || prev.messageTemplateId,
+      scheduledAt: proposedScheduledAt || prev.scheduledAt,
       category: (matchedDef as any).category || "COMPLIANCE",
     }));
   };
@@ -360,6 +467,8 @@ export default function ReminderFormDrawer({
     if (!form.targetUserId) return "Please select a client.";
     if (!form.selectedTaskDefinitionId)
       return "Please select a task definition.";
+    if (reminderDefinitions.length > 0 && !form.reminderDefinitionId)
+      return "Please select a reminder definition.";
     if (!form.taskName.trim()) return "Please enter a task name.";
     if (!form.channel) return "Please select a delivery channel.";
     if (!form.sendNow && !form.scheduledAt)
@@ -595,6 +704,80 @@ export default function ReminderFormDrawer({
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-txt-sub" />
                   </div>
+                </div>
+
+                {/* Reminder Rule / Definition Dropdown */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-txt-main">
+                      Reminder definition (rule){" "}
+                      {reminderDefinitions.length > 0 && (
+                        <span className="text-red-500">*</span>
+                      )}
+                    </label>
+                    {form.reminderDefinitionId && (
+                      <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        Rule selected
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={form.reminderDefinitionId}
+                      onChange={(e) => handleReminderDefChange(e.target.value)}
+                      disabled={!form.targetUserId}
+                      className={`${SELECT} pr-9 disabled:opacity-50`}
+                    >
+                      <option value="">
+                        {!form.targetUserId
+                          ? "Select a client first"
+                          : reminderDefinitions.length === 0
+                          ? "No reminder definitions found"
+                          : "Select a reminder definition"}
+                      </option>
+                      {matchingDefs.length > 0 && (
+                        <optgroup label="Rules for selected task definition">
+                          {matchingDefs.map((rd) => (
+                            <option
+                              key={rd.id}
+                              value={rd.id}
+                              className="bg-surface"
+                            >
+                              {rd.name} • {rd.channel} ({formatOffsetLabel(rd.offsetDays)})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {otherDefs.length > 0 && (
+                        <optgroup
+                          label={
+                            matchingDefs.length > 0
+                              ? "Other reminder rules"
+                              : "Available reminder rules"
+                          }
+                        >
+                          {otherDefs.map((rd) => (
+                            <option
+                              key={rd.id}
+                              value={rd.id}
+                              className="bg-surface"
+                            >
+                              {rd.name} • {rd.channel} ({formatOffsetLabel(rd.offsetDays)})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-txt-sub" />
+                  </div>
+                  {selectedReminderDef && (
+                    <p className="text-[11px] text-txt-sub mt-1 flex items-center gap-1.5">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span>
+                        Preset: {selectedReminderDef.channel} • {formatOffsetLabel(selectedReminderDef.offsetDays)}
+                      </span>
+                    </p>
+                  )}
                 </div>
 
                 <div>

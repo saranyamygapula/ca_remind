@@ -164,6 +164,7 @@ export default function TemplateFormDrawer({
             channels: data.channels,
             reminder_type:
               data.reminderType as UpdateMessageTemplateDto["reminder_type"],
+            serviceType: data.reminderType,
             businessCategory: data.businessCategory,
             isActive: data.isActive,
           };
@@ -176,6 +177,7 @@ export default function TemplateFormDrawer({
             channels: data.channels,
             reminder_type:
               data.reminderType as CreateMessageTemplateDto["reminder_type"],
+            serviceType: data.reminderType,
             businessCategory:
               data.businessCategory as CreateMessageTemplateDto["businessCategory"],
             isActive: data.isActive,

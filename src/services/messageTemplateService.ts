@@ -21,6 +21,7 @@ export const getMessageTemplates = (businessId: string): Promise<MessageTemplate
         name:             item.name ?? '',
         channels:         item.channels ?? [],
         reminder_type:    item.reminder_type,
+        serviceType:      item.serviceType ?? item.reminder_type,
         businessCategory: item.businessCategory ?? item.business_category ?? '',
         placeholders:     item.placeholders ?? [],
         isActive:         item.isActive ?? item.is_active ?? true,

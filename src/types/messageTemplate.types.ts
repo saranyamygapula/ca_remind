@@ -36,6 +36,7 @@ export interface MessageTemplate {
   placeholders: string[];
   channels: ChannelType[];
   reminder_type: ReminderType;
+  serviceType?: string;
   businessCategory: BusinessCategory;
   isActive: boolean;
   createdAt?: string;
@@ -51,6 +52,7 @@ export interface MessageTemplateListItem {
   name: string;
   channels: ChannelType[];
   reminder_type: ReminderType;
+  serviceType?: string;
   businessCategory: string;
   placeholders: string[];
   isActive: boolean;
@@ -66,6 +68,7 @@ export interface CreateMessageTemplateDto {
   placeholders: string[];
   channels: ChannelType[];
   reminder_type: ReminderType;
+  serviceType?: string;
   businessCategory: BusinessCategory;
   isActive: boolean;
 }
@@ -79,6 +82,7 @@ export interface UpdateMessageTemplateDto {
   placeholders?: string[];
   channels?: ChannelType[];
   reminder_type?: ReminderType;
+  serviceType?: string;
   businessCategory?: string;
   isActive?: boolean;
 }
